@@ -193,9 +193,10 @@ foreach ($parser->getSequenceList() as $sequence) {
 ## Caveats and Limitations
 
 - TELNET option negotiation is intentionally minimal and conservative.
-  - Incoming `DO`/`DONT` are answered with `WONT`.
-  - Incoming `WILL` is answered with `DONT`.
-  - This can conflict with servers expecting negotiated `ECHO`, `SGA`, or `LINEMODE` behavior.
+  - Internal option state tracking follows an RFC1143-style finite-state approach.
+  - Incoming `DO`/`DONT` are still denied (`WONT`) because local option support is not advertised.
+  - Incoming `WILL` for remote `ECHO`, `SGA`, and `LINEMODE` is accepted (`DO`); unsupported options are denied (`DONT`).
+  - This improves negotiation stability, but unsupported options can still be rejected by design.
 - Subnegotiation (`IAC SB ... IAC SE`) is currently parsed but dropped (not fully implemented).
 - Line ending normalization (`<CR><LF>` to `"\n"`) assumes server behavior follows TELNET text-mode conventions.
 - `setStreamTimeout()` is deprecated; use `setSocketTimeout()`.

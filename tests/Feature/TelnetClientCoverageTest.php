@@ -178,10 +178,10 @@ it('answers telnet option negotiations from the server', function () {
     $server->writeToClient(TelnetClient::CMD_IAC . TelnetClient::CMD_WILL . TelnetClient::OPT_ECHO . "again\r\n");
 
     $line = $telnet->getLine($matchesPrompt, true);
-    $replyWill = $server->readUntilContains([TelnetClient::CMD_IAC . TelnetClient::CMD_DONT . TelnetClient::OPT_ECHO]);
+    $replyWill = $server->readUntilContains([TelnetClient::CMD_IAC . TelnetClient::CMD_DO . TelnetClient::OPT_ECHO]);
 
     expect($line)->toBe("again\n");
-    expect(strpos($replyWill, TelnetClient::CMD_IAC . TelnetClient::CMD_DONT . TelnetClient::OPT_ECHO))->not->toBeFalse();
+    expect(strpos($replyWill, TelnetClient::CMD_IAC . TelnetClient::CMD_DO . TelnetClient::OPT_ECHO))->not->toBeFalse();
 
     $telnet->disconnect();
 });
@@ -238,13 +238,13 @@ it('handles escaped iac plus mixed telnet command branches', function () {
     $line = $telnet->getLine($matchesPrompt, true);
     $reply = $server->readUntilContains([
         TelnetClient::CMD_IAC . TelnetClient::CMD_WONT . TelnetClient::OPT_ECHO,
-        TelnetClient::CMD_IAC . TelnetClient::CMD_DONT . TelnetClient::OPT_ECHO,
+        TelnetClient::CMD_IAC . TelnetClient::CMD_DO . TelnetClient::OPT_ECHO,
     ]);
 
     expect(str_starts_with($line, TelnetClient::CMD_IAC))->toBeTrue();
     expect($line)->toContain('done');
     expect(strpos($reply, TelnetClient::CMD_IAC . TelnetClient::CMD_WONT . TelnetClient::OPT_ECHO))->not->toBeFalse();
-    expect(strpos($reply, TelnetClient::CMD_IAC . TelnetClient::CMD_DONT . TelnetClient::OPT_ECHO))->not->toBeFalse();
+    expect(strpos($reply, TelnetClient::CMD_IAC . TelnetClient::CMD_DO . TelnetClient::OPT_ECHO))->not->toBeFalse();
 
     $telnet->disconnect();
     TelnetClient::setDebug(false);
@@ -306,6 +306,31 @@ it('covers command state short buffer and reply write failure', function () {
 
     expect(fn () => $telnet->processStateMachinePublic($chars))
         ->toThrow(ConnectionException::class, 'Error writing to socket');
+});
+
+it('does not send duplicate reply for repeated will on an enabled option', function () {
+    $server = new TelnetServer(0);
+    $telnet = new TelnetClient('127.0.0.1', $server->getPort(), 1.0, 0.5, '$', 0.05);
+
+    $telnet->connect();
+    $server->accept();
+
+    $server->writeToClient(TelnetClient::CMD_IAC . TelnetClient::CMD_WILL . TelnetClient::OPT_ECHO . "first\r\n");
+    $matchesPrompt = false;
+    $line = $telnet->getLine($matchesPrompt, true);
+    $firstReply = $server->readUntilContains([TelnetClient::CMD_IAC . TelnetClient::CMD_DO . TelnetClient::OPT_ECHO]);
+
+    expect($line)->toBe("first\n");
+    expect(substr_count($firstReply, TelnetClient::CMD_IAC . TelnetClient::CMD_DO . TelnetClient::OPT_ECHO))->toBe(1);
+
+    $server->writeToClient(TelnetClient::CMD_IAC . TelnetClient::CMD_WILL . TelnetClient::OPT_ECHO . "second\r\n");
+    $line = $telnet->getLine($matchesPrompt, true);
+    $secondReply = $server->readFromClient(1024, 0.1);
+
+    expect($line)->toBe("second\n");
+    expect($secondReply)->toBeFalse();
+
+    $telnet->disconnect();
 });
 
 

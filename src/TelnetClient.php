@@ -75,6 +75,10 @@ class TelnetClient
     const TELNET_ERROR = false;
     const TELNET_OK = true;
 
+    // RFC1143-style option states (internal only)
+    const Q_STATE_NO = 0;
+    const Q_STATE_YES = 1;
+
 
     private static $DEBUG = false;
 
@@ -142,6 +146,8 @@ class TelnetClient
     private $has_go_ahead;
     private $ctrlcharparser;
     private $pruneCtrlSeq;
+    private $localOptState;
+    private $remoteOptState;
 
 
     /**
@@ -253,6 +259,89 @@ class TelnetClient
         $this->has_go_ahead = false; //By default the server speaks first (?)
         $this->ctrlcharparser = new AnsiAsciiControlParser();
         $this->pruneCtrlSeq = false;
+        $this->localOptState = array();
+        $this->remoteOptState = array();
+    }
+
+
+    private function isLocalOptSupported($opt)
+    {
+        // We currently do not advertise local option support.
+        return false;
+    }
+
+
+    private function isRemoteOptSupported($opt)
+    {
+        // Start with an explicit allowlist for remote capabilities we can work with.
+        return in_array($opt, array(self::OPT_ECHO, self::OPT_SGA, self::OPT_LINEMODE), true);
+    }
+
+
+    private function getOptState(array &$store, $opt)
+    {
+        if (!array_key_exists($opt, $store)) {
+            $store[$opt] = self::Q_STATE_NO;
+        }
+
+        return $store[$opt];
+    }
+
+
+    private function setOptState(array &$store, $opt, $state)
+    {
+        $store[$opt] = $state;
+    }
+
+
+    private function getNegotiationReplyCmd($cmd, $opt)
+    {
+        switch ($cmd) {
+        case self::CMD_DO:
+            if ($this->isLocalOptSupported($opt)) {
+                if ($this->getOptState($this->localOptState, $opt) === self::Q_STATE_NO) {
+                    $this->setOptState($this->localOptState, $opt, self::Q_STATE_YES);
+                    return self::CMD_WILL;
+                }
+                return null;
+            }
+
+            // Keep denying unsupported local options.
+            $this->setOptState($this->localOptState, $opt, self::Q_STATE_NO);
+            return self::CMD_WONT;
+
+        case self::CMD_DONT:
+            if ($this->getOptState($this->localOptState, $opt) === self::Q_STATE_YES) {
+                $this->setOptState($this->localOptState, $opt, self::Q_STATE_NO);
+                return self::CMD_WONT;
+            }
+            $this->setOptState($this->localOptState, $opt, self::Q_STATE_NO);
+            return null;
+
+        case self::CMD_WILL:
+            if ($this->isRemoteOptSupported($opt)) {
+                if ($this->getOptState($this->remoteOptState, $opt) === self::Q_STATE_NO) {
+                    $this->setOptState($this->remoteOptState, $opt, self::Q_STATE_YES);
+                    return self::CMD_DO;
+                }
+                return null;
+            }
+
+            // Refuse unsupported remote options deterministically.
+            $this->setOptState($this->remoteOptState, $opt, self::Q_STATE_NO);
+            return self::CMD_DONT;
+
+        case self::CMD_WONT:
+            if ($this->getOptState($this->remoteOptState, $opt) === self::Q_STATE_YES) {
+                $this->setOptState($this->remoteOptState, $opt, self::Q_STATE_NO);
+                return self::CMD_DONT;
+            }
+            $this->setOptState($this->remoteOptState, $opt, self::Q_STATE_NO);
+            return null;
+
+        default:
+            return null;
+        }
     }
 
 
@@ -846,18 +935,11 @@ class TelnetClient
                 }
                 break;
 
-            //TODO: Handle other commands
             case self::CMD_DO: //FALLTHROUGH
-            case self::CMD_DONT:
-                $reply_cmd = self::CMD_WONT;
-                break;
-
-            case self::CMD_WILL:
-                $reply_cmd = self::CMD_DONT;
-                break;
+            case self::CMD_DONT: //FALLTHROUGH
+            case self::CMD_WILL: //FALLTHROUGH
             case self::CMD_WONT:
-                //Pass, we are not supposed to "acknowledge" WONTs
-                //TODO: Reread the Q method RFC, I don't remember if this is right
+                $reply_cmd = $this->getNegotiationReplyCmd($cmd, $opt);
                 break;
 
             default:
