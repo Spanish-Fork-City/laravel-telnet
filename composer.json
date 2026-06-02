@@ -1,0 +1,38 @@
+{
+    "name": "spanish-fork-city/laravel-telnet",
+    "description": "A client for writing/reading commands to a host over telnet.",
+    "type": "library",
+    "license": "LGPL-3.0-only",
+    "authors": [
+        {
+            "name": "Boris Rizov",
+            "email": "boris.risov@gmail.com"
+        }
+    ],
+    "minimum-stability": "dev",
+    "require": {
+        "php": ">=8.4"
+    },
+    "autoload": {
+        "psr-4": {
+            "SpanishForkCity\\Telnet\\": "src/"
+        }
+    },
+    "require-dev": {
+        "pestphp/pest": "5.x-dev"
+    },
+    "scripts": {
+        "test": "./vendor/bin/pest --colors=always",
+        "test:coverage": "php -dzend_extension=/Applications/Herd.app/Contents/Resources/xdebug/xdebug-84-arm64.so -dxdebug.mode=coverage ./vendor/bin/pest --coverage --colors=always"
+    },
+    "config": {
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SpanishForkCity\\Telnet\\Tests\\": "tests/"
+        }
+    }
+}
