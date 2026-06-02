@@ -215,7 +215,5 @@ composer run test:coverage
 
 This library originated from work based on:
 
-- https://github.com/ngharo/Random-PHP-Classes/blob/master/Telnet.class.php
-
-It has since been rewritten and packaged for Composer.
+https://github.com/borisuu/laravel-telnet
 
