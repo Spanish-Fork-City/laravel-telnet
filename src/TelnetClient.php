@@ -1012,7 +1012,7 @@ class TelnetClient
 
     public function matchesPrompt($line)
     {
-        return preg_match("/{$this->regex_prompt}/", $line) === 1;
+        return preg_match("/{$this->regex_prompt}$/", rtrim($line)) === 1;
     }
 
 
